@@ -1,0 +1,56 @@
+# Environment variables and secrets
+.env 
+.env.*
+!.env.example
+
+#Python
+__pychache__/
+*.py[cod]
+*.pyo 
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+
+#Node / React
+node_modules/
+dist/
+build/
+.vite/
+
+
+#IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings/json
+.idea/
+
+#OS
+.DS_Store
+Thumbs.db
+
+#Logs
+*.log
+logs/
+
+#Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+#Temporary files
+*.tmp
+*.temp
+
+#ML artifacts
+*.pkl
+*.jonlin
+*.onnx
+
+#Generated files
+coverage/
