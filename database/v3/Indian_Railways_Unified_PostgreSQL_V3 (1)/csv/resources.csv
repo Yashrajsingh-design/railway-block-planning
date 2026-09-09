@@ -1,0 +1,11 @@
+resource_id,resource_name,department_id,resource_type
+R01,Track Maintenance Gang,ENG,CREW
+R02,S&T Maintenance Team,SNT,CREW
+R03,OHE Maintenance Team,TRD,CREW
+R04,Track Machine,ENG,MACHINE
+R05,Tower Wagon,TRD,MACHINE
+R06,Signal Testing Kit,SNT,EQUIPMENT
+R07,Power Isolation Team,TRD,SPECIALIST
+R08,Engineering Supervisor,ENG,SPECIALIST
+R09,S&T Supervisor,SNT,SPECIALIST
+R10,TRD Supervisor,TRD,SPECIALIST

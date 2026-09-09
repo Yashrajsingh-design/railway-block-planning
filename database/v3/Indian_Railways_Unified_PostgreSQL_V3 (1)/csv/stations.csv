@@ -1,0 +1,11 @@
+station_id,division_id,section_id,station_name
+ST01,D1,S01,Station 01
+ST02,D1,S01,Station 02
+ST03,D1,S02,Station 03
+ST04,D1,S03,Station 04
+ST05,D1,S04,Station 05
+ST06,D2,S06,Station 06
+ST07,D2,S06,Station 07
+ST08,D2,S07,Station 08
+ST09,D2,S08,Station 09
+ST10,D2,S09,Station 10

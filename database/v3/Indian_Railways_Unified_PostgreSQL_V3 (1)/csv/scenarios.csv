@@ -1,0 +1,7 @@
+scenario_id,scenario_name,description,train_conflict_weight,maintenance_priority_weight,resource_capacity_factor
+SC01,Normal Operations,Baseline operating conditions,1.0,1.0,1.0
+SC02,High Goods Traffic,Higher freight demand,1.4,1.0,1.0
+SC03,Critical Defects,Strong priority for critical work,1.0,1.6,1.0
+SC04,Reduced Resources,Reduced maintenance capacity,1.0,1.0,0.65
+SC05,Peak Passenger,Greater protection for passenger movements,1.5,1.0,1.0
+SC06,Emergency Replanning,Critical task added after plan creation,1.2,1.8,0.8

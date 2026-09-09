@@ -1,0 +1,25 @@
+-- Run from the directory containing the CSV files.
+BEGIN;
+\copy zones FROM 'zones.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy divisions FROM 'divisions.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy departments FROM 'departments.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy stations FROM 'stations.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy sections FROM 'sections.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy locations FROM 'locations.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy assets FROM 'assets.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy resources FROM 'resources.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy resource_availability FROM 'resource_availability.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy inspections FROM 'inspections.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy defects FROM 'defects.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy maintenance_tasks FROM 'maintenance_tasks.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy task_dependencies FROM 'task_dependencies.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy train_events FROM 'train_events.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy goods_forecast FROM 'goods_forecast.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy coa_windows FROM 'coa_windows.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy restrictions FROM 'restrictions.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy block_requests FROM 'block_requests.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy bundling_candidates FROM 'bundling_candidates.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy scenarios FROM 'scenarios.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy baseline_assignments FROM 'baseline_assignments.csv' WITH (FORMAT csv, HEADER true, NULL '');
+\copy plan_metrics FROM 'plan_metrics.csv' WITH (FORMAT csv, HEADER true, NULL '');
+COMMIT;

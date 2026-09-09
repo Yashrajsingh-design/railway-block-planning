@@ -1,0 +1,11 @@
+section_id,division_id,from_station_id,to_station_id,route_name,track_count,electrified
+S01,D1,ST01,ST02,Main Line 1,2,True
+S02,D1,ST02,ST03,Main Line 1,2,True
+S03,D1,ST03,ST04,Main Line 1,2,True
+S04,D1,ST04,ST05,Main Line 1,1,True
+S05,D1,ST02,ST04,Loop/Chord,1,True
+S06,D2,ST06,ST07,Main Line 2,2,True
+S07,D2,ST07,ST08,Main Line 2,2,True
+S08,D2,ST08,ST09,Main Line 2,2,True
+S09,D2,ST09,ST10,Main Line 2,1,True
+S10,D2,ST07,ST09,Loop/Chord,1,True
