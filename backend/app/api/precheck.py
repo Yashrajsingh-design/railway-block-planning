@@ -1,9 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-from app.schemas.precheck import (
-    PreCheckRequest,
-    PreCheckResponse,
-)
+from app.core.database import get_db
+from app.schemas.precheck import PreCheckRequest, PreCheckResponse
 from app.services.smart_precheck import SmartPreCheckService
 
 
@@ -11,7 +10,6 @@ router = APIRouter(
     prefix="/precheck",
     tags=["Smart Pre-Check"],
 )
-
 
 service = SmartPreCheckService()
 
@@ -22,6 +20,10 @@ service = SmartPreCheckService()
 )
 def run_precheck(
     request: PreCheckRequest,
+    db: Session = Depends(get_db),
 ) -> PreCheckResponse:
 
-    return service.run(request)
+    return service.run(
+        request=request,
+        db=db,
+    )

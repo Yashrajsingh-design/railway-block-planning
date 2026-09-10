@@ -1,6 +1,7 @@
-from datetime import date, time
+from datetime import date
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, Integer, String, Text, Time
+from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -9,68 +10,77 @@ from app.core.database import Base
 class BlockRequest(Base):
     __tablename__ = "block_requests"
 
-    request_id: Mapped[int] = mapped_column(
-        Integer,
+    block_request_id: Mapped[str] = mapped_column(
+        String,
         primary_key=True,
-        autoincrement=True,
     )
 
-    department_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    section_id: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    location_id: Mapped[int | None] = mapped_column(
-        Integer,
+    department_id: Mapped[str | None] = mapped_column(
+        String,
         nullable=True,
     )
 
-    asset_id: Mapped[int | None] = mapped_column(
-        Integer,
+    task_id: Mapped[str | None] = mapped_column(
+        String,
         nullable=True,
     )
 
-    maintenance_task_id: Mapped[int | None] = mapped_column(
-        Integer,
+    section_id: Mapped[str | None] = mapped_column(
+        String,
         nullable=True,
     )
 
-    preferred_date: Mapped[date] = mapped_column(
+    requested_date: Mapped[date | None] = mapped_column(
         Date,
-        nullable=False,
+        nullable=True,
     )
 
-    preferred_start_time: Mapped[time] = mapped_column(
-        Time,
-        nullable=False,
+    preferred_start: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
     )
 
-    preferred_end_time: Mapped[time] = mapped_column(
-        Time,
-        nullable=False,
+    preferred_end: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
     )
 
-    minimum_duration_minutes: Mapped[int] = mapped_column(
+    minimum_duration_min: Mapped[int | None] = mapped_column(
         Integer,
-        nullable=False,
+        nullable=True,
     )
 
-    block_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
+    block_type: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
     )
 
-    power_block_required: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
+    request_status: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
     )
 
-    work_description: Mapped[str] = mapped_column(
+    priority_score: Mapped[Decimal | None] = mapped_column(
+        Numeric,
+        nullable=True,
+    )
+
+    authorization_status: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    work_description: Mapped[str | None] = mapped_column(
         Text,
-        nullable=False,
+        nullable=True,
     )
 
-    status: Mapped[str] = mapped_column(
-        String(30),
-        nullable=False,
-        default="SUBMITTED",
+    power_block_required: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+
+    bundling_candidate: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
     )

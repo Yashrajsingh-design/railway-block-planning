@@ -4,12 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class PreCheckRequest(BaseModel):
-    department_id: int
-    section_id: int
+    department_id: str
+    section_id: str
 
-    location_id: int | None = None
-    asset_id: int | None = None
-    maintenance_task_id: int | None = None
+    location_id: str | None = None
+    asset_id: str | None = None
+    maintenance_task_id: str | None = None
 
     preferred_date: date
     preferred_start_time: time
@@ -20,10 +20,14 @@ class PreCheckRequest(BaseModel):
         le=1440,
     )
 
-    block_type: str
+    block_type: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
     power_block_required: bool = False
 
-    resource_ids: list[int] = []
+    resource_ids: list[str] = []
 
 
 class PreCheckIssue(BaseModel):
@@ -45,6 +49,7 @@ class PreCheckResponse(BaseModel):
 
     checks_total: int
     checks_passed: int
+
     warnings: int
     blocks: int
 
