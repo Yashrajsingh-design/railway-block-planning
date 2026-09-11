@@ -1,9 +1,20 @@
+export type PlanAlternative = {
+  window_id: string
+  section_id: string
+  start_time: string
+  end_time: string
+  duration_min: number
+  restriction_penalty?: number
+}
+
 export type PlanExplanation = {
   task_id: string
   section_id: string
   priority_score: number
   reason_code: string
   reason: string
+  best_alternative?: PlanAlternative
+  alternatives: PlanAlternative[]
 }
 
 export type PlanAssignment = {
@@ -29,6 +40,7 @@ export type PlanExplanationsResponse = {
   unscheduled_count: number
   explanations: PlanExplanation[]
 }
+
 const API = 'http://127.0.0.1:8000'
 
 export async function getPlanExplanations(): Promise<PlanExplanationsResponse> {
@@ -47,7 +59,9 @@ export async function getPlanExplanations(): Promise<PlanExplanationsResponse> {
   )
 
   if (!response.ok) {
-    throw new Error(`Plan explanation API failed: ${response.status}`)
+    throw new Error(
+      `Plan explanation API failed: ${response.status}`,
+    )
   }
 
   return response.json()

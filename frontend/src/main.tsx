@@ -2070,16 +2070,16 @@ function Recommended() {
                 </div>
 
                 <div className="assignmentDetails">
-                  <span>Window {item.window_id}</span>
-                  <span>{item.duration_min} min</span>
+  <span>Window {item.window_id}</span>
 
-                  {item.restriction_penalty &&
-                    item.restriction_penalty > 0 && (
-                      <span className="restrictionWarning">
-                        Restriction penalty {item.restriction_penalty}
-                      </span>
-                    )}
-                </div>
+  <span>{item.duration_min} min</span>
+
+ {(item.restriction_penalty ?? 0) > 0 && (
+      <span className="restrictionWarning">
+        Restriction penalty {item.restriction_penalty}
+      </span>
+    )}
+</div>
               </div>
             </div>
           ))}
@@ -2126,6 +2126,38 @@ function Recommended() {
               </div>
 
               <p>{item.reason}</p>
+          {item.best_alternative && (
+            <div className="alternativeBox">
+              <div className="alternativeHeader">
+                <span className="alternativeLabel">
+                  BEST ALTERNATIVE
+                </span>
+
+                <span className="alternativeWindow">
+                  {item.best_alternative.window_id}
+                </span>
+              </div>
+
+              <div className="alternativeDetails">
+                <strong>
+                  {formatTime(item.best_alternative.start_time)}
+                  {' '}to{' '}
+                  {formatTime(item.best_alternative.end_time)}
+                </strong>
+
+                <span>
+                  {item.best_alternative.duration_min} min
+                </span>
+
+                {(item.best_alternative.restriction_penalty ?? 0) > 0 && (
+                    <span className="restrictionWarning">
+                      Restriction penalty{' '}
+                      {item.best_alternative.restriction_penalty}
+                    </span>
+                  )}
+              </div>
+            </div>
+          )}
             </div>
           ))}
         </div>
