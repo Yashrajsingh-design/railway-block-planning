@@ -448,3 +448,196 @@
   color: #8a6200;
   font-weight: 600;
 }
+/* ============================================================
+   BLOCK PLANNER / TIMELINE
+   ============================================================ */
+
+.plannerSummary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.plannerSummary > div {
+  padding: 15px 16px;
+  background: #ffffff;
+  border: 1px solid #d9e3eb;
+  border-radius: 12px;
+}
+
+.plannerSummary span {
+  display: block;
+  margin-bottom: 5px;
+  color: #718096;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.plannerSummary strong {
+  font-size: 20px;
+  color: #17324d;
+}
+
+.plannerCard {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #d9e3eb;
+  border-radius: 16px;
+}
+
+.plannerCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #e2e8ee;
+}
+
+.plannerCardHeader h2 {
+  margin: 4px 0 5px;
+}
+
+.plannerCardHeader p {
+  margin: 0;
+  color: #66788a;
+  font-size: 13px;
+}
+
+.timeline {
+  width: 100%;
+}
+
+.timelineHeader,
+.timelineRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.timelineHeader {
+  min-height: 44px;
+  background: #f7f9fb;
+  border-bottom: 1px solid #e2e8ee;
+}
+
+.timelineLabel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 14px;
+  border-right: 1px solid #e2e8ee;
+}
+
+.timelineLabel strong {
+  color: #17324d;
+  font-size: 13px;
+}
+
+.timelineLabel span {
+  margin-top: 3px;
+  color: #8190a0;
+  font-size: 10px;
+}
+
+.timelineHours {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: center;
+}
+
+.timelineHours span {
+  color: #718096;
+  font-size: 11px;
+  text-align: center;
+}
+
+.timelineRow {
+  min-height: 76px;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.timelineTrack {
+  position: relative;
+  min-height: 76px;
+  overflow: hidden;
+  background: #fbfcfd;
+}
+
+.timelineGridLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #e7edf2;
+}
+
+.timelineBlock {
+  position: absolute;
+  top: 17px;
+  min-width: 52px;
+  height: 42px;
+  padding: 6px 9px;
+  overflow: hidden;
+  border: 1px solid #a9ddd7;
+  border-radius: 8px;
+  background: #dff5f1;
+  box-shadow: 0 2px 5px rgba(20, 50, 75, 0.06);
+  cursor: default;
+}
+
+.timelineBlock strong,
+.timelineBlock span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.timelineBlock strong {
+  color: #006f67;
+  font-size: 11px;
+}
+
+.timelineBlock span {
+  margin-top: 2px;
+  color: #4c6972;
+  font-size: 10px;
+}
+
+.emptyTimeline {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #718096;
+}
+
+.emptyTimeline strong {
+  color: #17324d;
+}
+
+@media (max-width: 1000px) {
+  .plannerSummary {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .plannerSummary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .plannerCard {
+    overflow-x: auto;
+  }
+
+  .timeline {
+    min-width: 760px;
+  }
+}

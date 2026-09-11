@@ -1843,35 +1843,408 @@ function RequestDetail({
 // ============================================================
 
 function Planner() {
+  const [data, setData] = useState<PlanExplanationsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  return (
+  async function loadPlan() {
+    try {
+      setLoading(true)
+      setError(null)
 
-    <div className="placeholder">
+      const result = await getPlanExplanations()
+      setData(result)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not load planning data.',
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      <CalendarDays size={42} />
+  useEffect(() => {
+    loadPlan()
+  }, [])
 
-      <h1>
-        Block Planner
-      </h1>
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="pageHeader">
+          <div>
+            <div className="eyebrow">BLOCK PLANNER</div>
+            <h1>Planning Horizon</h1>
+            <p>
+              Building the maintenance block timeline...
+            </p>
+          </div>
+        </div>
 
-      <p>
-        Timeline planning surface is next.
-        It will consume COA windows, train
-        events, restrictions, resources and
-        optimizer assignments.
-      </p>
+        <div className="placeholder">
+          <CalendarDays size={42} />
+          <h2>Loading plan</h2>
+          <p>
+            Checking optimizer assignments, corridor windows,
+            resources and operational constraints.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
-      <button className="runBtn">
-        Open Planning Horizon
-      </button>
+  if (error || !data) {
+    return (
+      <div className="page">
+        <div className="pageHeader">
+          <div>
+            <div className="eyebrow">BLOCK PLANNER</div>
+            <h1>Planning Horizon</h1>
+            <p>Unable to load the current planning result.</p>
+          </div>
+        </div>
 
-    </div>
+        <div className="errorCard">
+          <strong>Could not load planning data</strong>
+          <p>{error ?? 'No planning data was returned.'}</p>
 
+          <button
+            className="primaryButton"
+            onClick={loadPlan}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const assignments = [...data.assignments].sort(
+    (a, b) =>
+      a.start_time.localeCompare(b.start_time) ||
+      a.section_id.localeCompare(b.section_id),
   )
+
+  const sections = [
+    ...new Set(assignments.map((item) => item.section_id)),
+  ]
+
+  const timelineStart = 18 * 60
+  const timelineEnd = 24 * 60
+  const timelineDuration = timelineEnd - timelineStart
+
+ const toMinutes = (value: string) => {
+  const [hours, minutes] = value
+    .slice(0, 5)
+    .split(':')
+    .map(Number)
+
+  const normalizedHours = hours === 0 ? 24 : hours
+
+  return normalizedHours * 60 + minutes
 }
 
+  const getLeft = (value: string) => {
+    const minutes = toMinutes(value)
 
+    return (
+      ((minutes - timelineStart) / timelineDuration) * 100
+    )
+  }
 
+  const getWidth = (
+    start: string,
+    end: string,
+  ) => {
+    const startMinutes = Math.max(
+      timelineStart,
+      toMinutes(start),
+    )
+
+    const endMinutes = Math.min(
+      timelineEnd,
+      toMinutes(end),
+    )
+
+    return (
+      ((endMinutes - startMinutes) /
+        timelineDuration) *
+      100
+    )
+  }
+
+  const formatTime = (value: string) =>
+    value.slice(0, 5)
+
+  const hourMarkers = [
+    '18:00',
+    '19:00',
+    '20:00',
+    '21:00',
+    '22:00',
+    '23:00',
+    '00:00',
+  ]
+
+  return (
+    <div className="page">
+      <div className="pageHeader">
+        <div>
+          <div className="eyebrow">BLOCK PLANNER</div>
+
+          <h1>Planning Horizon</h1>
+
+          <p>
+            {data.planning_date} · {data.block_type} block
+          </p>
+        </div>
+
+        <button
+          className="secondaryButton"
+          onClick={loadPlan}
+        >
+          Refresh Plan
+        </button>
+      </div>
+
+      <div className="plannerSummary">
+        <div>
+          <span>Allocated</span>
+          <strong>{data.assigned_count}</strong>
+        </div>
+
+        <div>
+          <span>Unscheduled</span>
+          <strong>{data.unscheduled_count}</strong>
+        </div>
+
+        <div>
+          <span>Candidate pairs</span>
+          <strong>{data.candidate_pairs}</strong>
+        </div>
+
+        <div>
+          <span>Total priority</span>
+          <strong>{data.total_priority.toFixed(1)}</strong>
+        </div>
+
+        <div>
+          <span>Solver</span>
+          <strong className="successText">
+            {data.status}
+          </strong>
+        </div>
+      </div>
+
+      <section className="plannerCard">
+        <div className="plannerCardHeader">
+          <div>
+            <div className="eyebrow">
+              OPTIMIZED TIMELINE
+            </div>
+
+            <h2>Maintenance Block Schedule</h2>
+
+            <p>
+              Recommended assignments across available
+              corridor windows.
+            </p>
+          </div>
+
+          <span className="countBadge">
+            {assignments.length} blocks
+          </span>
+        </div>
+
+        <div className="timeline">
+          <div className="timelineHeader">
+            <div className="timelineLabel">
+              SECTION
+            </div>
+
+            <div className="timelineHours">
+              {hourMarkers.map((hour) => (
+                <span key={hour}>{hour}</span>
+              ))}
+            </div>
+          </div>
+
+          {sections.length === 0 ? (
+            <div className="emptyTimeline">
+              <CalendarDays size={28} />
+
+              <strong>No assignments</strong>
+
+              <span>
+                The optimizer did not allocate any task
+                in this planning horizon.
+              </span>
+            </div>
+          ) : (
+            sections.map((section) => {
+              const sectionAssignments =
+                assignments.filter(
+                  (item) =>
+                    item.section_id === section,
+                )
+
+              return (
+                <div
+                  className="timelineRow"
+                  key={section}
+                >
+                  <div className="timelineLabel">
+                    <strong>{section}</strong>
+
+                    <span>
+                      {sectionAssignments.length}{' '}
+                      block
+                      {sectionAssignments.length !== 1
+                        ? 's'
+                        : ''}
+                    </span>
+                  </div>
+
+                  <div className="timelineTrack">
+                    {hourMarkers.map((hour) => (
+                      <div
+                        className="timelineGridLine"
+                        key={hour}
+                        style={{
+                          left: `${
+                            getLeft(hour)
+                          }%`,
+                        }}
+                      />
+                    ))}
+
+                    {sectionAssignments.map(
+                      (item) => (
+                        <div
+                          className="timelineBlock"
+                          key={item.task_id}
+                          style={{
+                            left: `${Math.max(
+                              0,
+                              getLeft(
+                                item.start_time,
+                              ),
+                            )}%`,
+                            width: `${Math.max(
+                              2,
+                              getWidth(
+                                item.start_time,
+                                item.end_time,
+                              ),
+                            )}%`,
+                          }}
+                          title={`${item.task_id} · ${item.start_time}–${item.end_time}`}
+                        >
+                          <strong>
+                            {item.task_id}
+                          </strong>
+
+                          <span>
+                            {formatTime(
+                              item.start_time,
+                            )}
+                            {'–'}
+                            {formatTime(
+                              item.end_time,
+                            )}
+                          </span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </section>
+
+      <section className="contentSection">
+        <div className="sectionHeading">
+          <div>
+            <div className="eyebrow">
+              ASSIGNMENT DETAILS
+            </div>
+
+            <h2>Optimized Blocks</h2>
+          </div>
+
+          <span className="countBadge">
+            {assignments.length} tasks
+          </span>
+        </div>
+
+        <div className="planAssignmentList">
+          {assignments.map((item) => (
+            <div
+              className="planAssignmentCard"
+              key={item.task_id}
+            >
+              <div className="planAssignmentTime">
+                <strong>
+                  {formatTime(item.start_time)}
+                </strong>
+
+                <span>to</span>
+
+                <strong>
+                  {formatTime(item.end_time)}
+                </strong>
+              </div>
+
+              <div className="planAssignmentMain">
+                <div className="recommendationTop">
+                  <div>
+                    <strong>
+                      {item.task_id}
+                    </strong>
+
+                    <span className="sectionTag">
+                      {item.section_id}
+                    </span>
+
+                    <span className="resourceTag">
+                      {item.resource_id}
+                    </span>
+                  </div>
+
+                  <span className="priorityBadge">
+                    Priority{' '}
+                    {item.priority_score.toFixed(1)}
+                  </span>
+                </div>
+
+                <div className="assignmentDetails">
+                  <span>
+                    Window {item.window_id}
+                  </span>
+
+                  <span>
+                    {item.duration_min} min
+                  </span>
+
+                  {(item.restriction_penalty ?? 0) >
+                    0 && (
+                    <span className="restrictionWarning">
+                      Restriction penalty{' '}
+                      {item.restriction_penalty}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
 
 function Recommended() {
   const [data, setData] = useState<PlanExplanationsResponse | null>(null)
@@ -2074,7 +2447,7 @@ function Recommended() {
 
   <span>{item.duration_min} min</span>
 
- {(item.restriction_penalty ?? 0) > 0 && (
+{(item.restriction_penalty ?? 0) > 0 && (
       <span className="restrictionWarning">
         Restriction penalty {item.restriction_penalty}
       </span>
