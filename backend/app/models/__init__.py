@@ -13,6 +13,8 @@ from app.models.coa_window import CoaWindow
 from app.models.train_event import TrainEvent
 from app.models.resource import Resource
 from app.models.resource_availability import ResourceAvailability
+from app.models.plan import Plan
+from app.models.plan_assignment import PlanAssignment
 
 
 __all__ = [
@@ -31,4 +33,6 @@ __all__ = [
     "Resource",
     "ResourceAvailability",
     "TrainEvent",
+    "Plan",
+    "PlanAssignment",
 ]

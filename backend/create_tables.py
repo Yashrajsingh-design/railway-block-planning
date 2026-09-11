@@ -1,5 +1,5 @@
 from app.core.database import Base, engine
-from app.models.block_request import BlockRequest
+import app.models
 
 
 print("Creating database tables...")
