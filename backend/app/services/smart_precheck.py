@@ -14,6 +14,7 @@ from app.schemas.precheck import (
     SuggestedWindow,
 )
 from app.models.coa_window import CoaWindow
+from app.models.resource_availability import ResourceAvailability
 
 
 class SmartPreCheckService:
@@ -60,7 +61,41 @@ class SmartPreCheckService:
         else:
             checks_passed += 1
 
-        # 2. Department exists
+        # 2. Block type validity and power consistency
+        checks_total += 1
+        allowed_block_types = {"TRAFFIC", "POWER", "INTEGRATED"}
+
+        if request.block_type not in allowed_block_types:
+            blocks += 1
+            issues.append(
+                PreCheckIssue(
+                    code="INVALID_BLOCK_TYPE",
+                    severity="BLOCK",
+                    message="Selected block type is not supported by the planning system.",
+                )
+            )
+        elif request.block_type == "POWER" and not request.power_block_required:
+            blocks += 1
+            issues.append(
+                PreCheckIssue(
+                    code="POWER_REQUIREMENT_MISMATCH",
+                    severity="BLOCK",
+                    message="A Power Block requires 25kV OHE power isolation to be enabled.",
+                )
+            )
+        elif request.power_block_required and request.block_type == "TRAFFIC":
+            blocks += 1
+            issues.append(
+                PreCheckIssue(
+                    code="POWER_REQUIREMENT_MISMATCH",
+                    severity="BLOCK",
+                    message="25kV OHE power isolation requires a Power or Integrated block type.",
+                )
+            )
+        else:
+            checks_passed += 1
+
+        # 3. Department exists
         checks_total += 1
 
         department = db.execute(
@@ -149,7 +184,7 @@ class SmartPreCheckService:
                     PreCheckIssue(
                         code="TASK_LOCATION_MISMATCH",
                         severity="BLOCK",
-                        message="Maintenance task does not belong to the selected department and section.",
+                        message="Maintenancetask does not belong to the selected department and section.",
                     )
                 )
             else:
@@ -171,6 +206,12 @@ class SmartPreCheckService:
         conflict_found = False
 
         for existing in existing_requests:
+
+            if (
+                request.block_request_id
+                and existing.block_request_id == request.block_request_id
+            ):
+                continue
 
             if not existing.preferred_start or not existing.preferred_end:
                 continue
@@ -249,7 +290,7 @@ class SmartPreCheckService:
 
             # Requested block must fit completely inside
             # the available COA window.
-            if start >= window_start and end <= window_end:
+            if start >= window_start and end<= window_end:
                 coa_window_found = True
                 checks_passed += 1
                 break
@@ -286,6 +327,9 @@ class SmartPreCheckService:
                 )
             )
 
+        # 9. Selected resource availability
+        checks_total += 1
+
         if not request.resource_ids:
             warnings += 1
             issues.append(
@@ -295,6 +339,47 @@ class SmartPreCheckService:
                     message="No maintenance resources were selected.",
                 )
             )
+        else:
+            unavailable_resources: list[str] = []
+
+            for resource_id in request.resource_ids:
+                rows = db.execute(
+                    select(ResourceAvailability).where(
+                        ResourceAvailability.resource_id == resource_id,
+                        ResourceAvailability.date == request.preferred_date,
+                    )
+                ).scalars().all()
+
+                resource_ok = False
+                for row in rows:
+                    if not row.is_available or not row.capacity or row.capacity <= 0:
+                        continue
+                    if row.start_time is None or row.end_time is None:
+                        continue
+                    if (
+                        row.start_time <= request.preferred_start_time
+                        and request.preferred_end_time <= row.end_time
+                    ):
+                        resource_ok = True
+                        break
+
+                if not resource_ok:
+                    unavailable_resources.append(resource_id)
+
+            if unavailable_resources:
+                blocks += 1
+                issues.append(
+                    PreCheckIssue(
+                        code="RESOURCE_UNAVAILABLE",
+                        severity="BLOCK",
+                        message=(
+                            "Selected resource(s) are not available for the requested date/time: "
+                            + ", ".join(unavailable_resources)
+                        ),
+                    )
+                )
+            else:
+                checks_passed += 1
 
         # Suggested alternative windows from available COA windows
         suggested_windows: list[SuggestedWindow] = []
@@ -340,6 +425,12 @@ class SmartPreCheckService:
 
             for existing in existing_requests:
 
+                if (
+                    request.block_request_id
+                    and existing.block_request_id == request.block_request_id
+                ):
+                    continue
+
                 if not existing.preferred_start or not existing.preferred_end:
                     continue
 
@@ -376,7 +467,7 @@ class SmartPreCheckService:
             if conflict:
                 continue
 
-            # Use the earliest possible slot inside this COA window.
+            # Use the earliest possible slotinside this COA window.
             candidate_start = window_start
             candidate_end = candidate_start + timedelta(
                 minutes=request.minimum_duration_minutes

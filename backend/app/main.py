@@ -9,6 +9,7 @@ from app.api.priority import router as priority_router
 from app.api.candidate_windows import router as candidate_windows_router
 from app.api.optimization import router as optimization_router
 from app.api.plan_explanations import router as plan_explanations_router
+from app.api.plan_comparison import router as plan_comparison_router
 from app.api.dashboard import router as dashboard_router
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -66,5 +67,6 @@ app.include_router(
     precheck_router, prefix="/api/v1")
 
 app.include_router(plan_explanations_router)
+app.include_router(plan_comparison_router)
 
 app.include_router(dashboard_router)

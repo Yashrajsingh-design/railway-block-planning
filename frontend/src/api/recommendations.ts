@@ -30,6 +30,7 @@ export type PlanAssignment = {
 }
 
 export type PlanExplanationsResponse = {
+  plan_id?: string;
   planning_date: string
   block_type: string
   status: string

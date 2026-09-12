@@ -32,10 +32,59 @@ import {
   type PlanExplanationsResponse,
 } from './api/recommendations'
 
+import {
+  runPreCheck,
+  type PreCheckResponse,
+} from './api/precheck'
 
 // ============================================================
 // API
 // ============================================================
+
+type PlanAssignment = {
+  task_id: string;
+  section_id: string;
+  window_id: string;
+  resource_id: string;
+  start_time: string;
+  end_time: string;
+  duration_min: number;
+  priority_score: number;
+  restriction_penalty?: number;
+};
+
+type PlanExplanation = {
+  task_id: string;
+  section_id: string;
+  priority_score: number;
+  reason_code: string;
+  reason: string;
+  best_alternative?: {
+    start_time: string;
+    end_time: string;
+    score: number;
+    reason: string;
+  } | null;
+  alternatives?: {
+    start_time: string;
+    end_time: string;
+    score: number;
+    reason: string;
+  }[];
+};
+
+type PlanResponse = {
+  planning_date: string;
+  block_type: string;
+  status: string;
+  candidate_pairs: number;
+  assigned_count: number;
+  total_priority: number;
+  assignments: PlanAssignment[];
+  unscheduled_count: number;
+  explanations: PlanExplanation[];
+};
+
 
 const API = 'http://127.0.0.1:8000'
 
@@ -62,6 +111,8 @@ type RequestItem = {
   department: string
   task: string
   asset: string
+  assetId?: string
+  locationId?: string
   section: string
   date: string
   start: string
@@ -73,7 +124,6 @@ type RequestItem = {
   authorizationStatus: string
   power: boolean
 }
-
 
 // ============================================================
 // DEMO FALLBACK REQUESTS
@@ -161,6 +211,8 @@ function App() {
               asset:
                 x.asset_id ||
                 'Asset linked to maintenance task',
+              assetId: x.asset_id,
+              locationId: x.location_id,
               section: x.section_id,
               date: x.requested_date,
               start: x.preferred_start,
@@ -260,10 +312,17 @@ function App() {
           />
         )}
 
-        {screen.startsWith('/requests/') && (
+        {screen.startsWith('/requests/') && screen !== '/requests/new' && (
           <RequestDetail
             requests={requests}
             onBack={() => navigate('/requests')}
+            onUpdated={(updated) => {
+              setRequests((current) =>
+                current.map((item) =>
+                  item.id === updated.id ? updated : item,
+                ),
+              )
+            }}
           />
         )}
 
@@ -1447,391 +1506,670 @@ function RequestCard({
 function RequestDetail({
   requests,
   onBack,
+  onUpdated,
 }: {
   requests: RequestItem[]
   onBack: () => void
+  onUpdated: (updated: RequestItem) => void
 }) {
+  const location = useLocation()
+
+  const requestId =
+    location.pathname.split('/').filter(Boolean).pop() ?? ''
 
   const request =
-    requests[0]
+    requests.find((item) => item.id === requestId)
+
+  const [preferredDate, setPreferredDate] =
+    useState(request?.date ?? '2026-09-02')
+
+  const [startTime, setStartTime] =
+    useState(request?.start ?? '18:00')
+
+  const [endTime, setEndTime] =
+    useState(request?.end ?? '20:00')
+
+  const [minimumDuration, setMinimumDuration] =
+    useState(request?.duration ?? 120)
+
+  const [blockType, setBlockType] =
+    useState(
+      request?.blockType
+        ?.toUpperCase()
+        .replace(' BLOCK', '') ?? 'TRAFFIC',
+    )
+
+  const [powerBlock, setPowerBlock] =
+    useState(request?.power ?? false)
+
+  const [resourceIds, setResourceIds] =
+    useState<string[]>(
+      request?.department === 'ENG'
+        ? ['R01']
+        : request?.department === 'SNT'
+          ? ['R02']
+          : ['R03'],
+    )
 
   const [pre, setPre] =
-    useState<any>(null)
+    useState<PreCheckResponse | null>(null)
 
   const [loading, setLoading] =
     useState(false)
 
+  const [error, setError] =
+    useState<string | null>(null)
+
+  const [submitting, setSubmitting] =
+    useState(false)
+
+  useEffect(() => {
+    if (!request) return
+
+    setPreferredDate(request.date ?? '2026-09-02')
+    setStartTime(request.start ?? '18:00')
+    setEndTime(request.end ?? '20:00')
+    setMinimumDuration(request.duration ?? 120)
+    setBlockType(
+      request.blockType
+        ?.toUpperCase()
+        .replace(' BLOCK', '') ?? 'TRAFFIC',
+    )
+    setPowerBlock(Boolean(request.power))
+    setResourceIds(
+      request.department === 'ENG'
+        ? ['R01']
+        : request.department === 'SNT'
+          ? ['R02']
+          : ['R03'],
+    )
+    setPre(null)
+    setError(null)
+  }, [request?.id])
+
+  if (!request) {
+    return (
+      <div className="placeholder">
+        <h1>Request not found</h1>
+        <p>
+          The selected block request could not be loaded.
+        </p>
+
+        <button
+          className="runBtn"
+          onClick={onBack}
+        >
+          Back to Requests
+        </button>
+      </div>
+    )
+  }
+
+  const taskId =
+    request.task.split('·')[0].trim()
+
+  const departmentId =
+    request.department.split('·')[0].trim()
+
+  const sectionId =
+    request.section
+      .split(' ')[0]
+      .trim()
+
+  const locationId = request.locationId
+  const assetId = request.assetId
 
   const run = async () => {
-
     setLoading(true)
+    setError(null)
+    setPre(null)
 
     try {
-
-      const result =
-        await api<any>(
-          '/api/v1/precheck',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              department_id: 'ENG',
-              section_id: 'S02',
-              location_id: 'L00002',
-              asset_id: 'A00002',
-              maintenance_task_id: 'T00002',
-              preferred_date:
-                '2026-09-02',
-              preferred_start_time:
-                '14:00',
-              preferred_end_time:
-                '16:30',
-              minimum_duration_minutes:
-                120,
-              block_type:
-                'TRAFFIC',
-              power_block_required:
-                true,
-              resource_ids: ['R01'],
-            }),
-          },
-        )
-
-      setPre(result)
-
-    } catch {
-
-      setPre({
-        status: 'WARNING',
-        checks_total: 7,
-        checks_passed: 6,
-        warnings: 1,
-        blocks: 0,
-        suggested_windows: [],
+      const result = await runPreCheck({
+        block_request_id: request.id,
+        department_id: departmentId,
+        section_id: sectionId,
+        location_id: locationId,
+        asset_id: assetId,
+        maintenance_task_id: taskId,
+        preferred_date: preferredDate,
+        preferred_start_time: startTime,
+        preferred_end_time: endTime,
+        minimum_duration_minutes: minimumDuration,
+        block_type: blockType,
+        power_block_required: powerBlock,
+        resource_ids: resourceIds,
       })
 
+      setPre(result)
+    } catch (err) {
+      console.error('Pre-check error:', err)
+
+      setError(
+        'Could not reach the planning server. Check that the backend is running.',
+      )
     } finally {
-
       setLoading(false)
-
     }
   }
 
+  const submitRequest = async () => {
+    if (!pre?.can_submit) return
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const updated = await api<any>(
+        `/api/v1/requests/${request.id}/status`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'VALIDATED' }),
+        },
+      )
+
+      const updatedRequest: RequestItem = {
+        ...request,
+        requestStatus: updated.request_status ?? 'VALIDATED',
+        authorizationStatus:
+          updated.authorization_status ?? request.authorizationStatus,
+      }
+
+      onUpdated(updatedRequest)
+      setPre(null)
+      alert(`Request ${request.id} submitted and validated.`)
+    } catch (err) {
+      console.error('Submit request error:', err)
+      setError(
+        'The request could not be submitted. The lifecycle service rejected the transition.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const toggleResource = (resourceId: string) => {
+    setResourceIds((current) =>
+      current.includes(resourceId)
+        ? current.filter((id) => id !== resourceId)
+        : [...current, resourceId],
+    )
+  }
 
   return (
-
     <>
-
       <button
         className="back"
         onClick={onBack}
       >
-
         <ArrowLeft size={17} />
-
         Request Detail
-
         <span>
           IR-ABPS · DLI Div
         </span>
-
       </button>
 
-
       <div className="steps">
-
-        <b>
+        <b className="done">
           ✓
-          <small>
-            Details
-          </small>
+          <small>Details</small>
         </b>
 
-        <b className="current">
-          2
-          <small>
-            Time & Block
-          </small>
+        <b className={!pre ? 'current' : 'done'}>
+          {!pre ? '2' : '✓'}
+          <small>Time & Block</small>
         </b>
 
-        <b>
-          3
-          <small>
-            Pre-check
-          </small>
+        <b className={pre ? (pre.can_submit ? 'done' : 'current') : ''}>
+          {pre?.can_submit ? '✓' : '3'}
+          <small>Pre-check</small>
         </b>
 
-        <b>
+        <b className={pre?.can_submit ? 'current' : ''}>
           4
-          <small>
-            Submit
-          </small>
+          <small>Submit</small>
         </b>
-
       </div>
 
-
       <div className="detailHero">
-
         <div>
-
-          <span>
-            T00022
-          </span>
-
-          <span>
-            ENG Dept
-          </span>
+          <span>{taskId}</span>
+          <span>{request.department}</span>
 
           <h2>
-            Track UP-S02-KM48
-            (Turnout 12A)
+            {request.asset}
           </h2>
 
           <p>
-            Ultrasonic Flaw Detection
-            (USFD) micro-crack detected.
-            Immediate block maintenance
-            mandated.
+            Maintenance task {taskId} for
+            {' '}
+            {request.section}.
           </p>
-
         </div>
 
-
         <em>
-          ⚠ Score 92/100 · Overdue 2d
+          ⚠ Score {request.priority}/100
         </em>
-
       </div>
-
 
       <section className="formCard">
 
         <div className="formHead">
-
           <h2>
             Block Specifications
           </h2>
 
           <span>
-            ⇄ Step 2 of 4
+            Step 2 of 4
           </span>
-
         </div>
 
+        {/* SECTION */}
 
         <label>
-
           OPERATIONAL SECTION
 
           <div className="field locked">
-            ⚯ Section S02
-            (Ghaziabad - Aligarh)
+            {request.section}
             <span>🔒</span>
           </div>
-
         </label>
 
+        {/* DATE + DURATION */}
 
         <div className="two">
 
           <label>
-
             PREFERRED DATE
 
-            <div className="field">
-              ▣ Today (24 Oct)
-            </div>
-
+            <input
+              className="fieldInput"
+              type="date"
+              value={preferredDate}
+              onChange={(event) =>
+                setPreferredDate(event.target.value)
+              }
+            />
           </label>
 
-
           <label>
+            MINIMUM DURATION
 
-            BLOCK TARGET
+            <div className="numberField">
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={minimumDuration}
+                onChange={(event) =>
+                  setMinimumDuration(
+                    Number(event.target.value),
+                  )
+                }
+              />
 
-            <div className="field">
-
-              <b>
-                150 min
-              </b>
-
-              <small>
-                Min: 120m
-              </small>
-
+              <span>minutes</span>
             </div>
-
           </label>
 
         </div>
 
+        {/* TIME */}
 
         <label>
-
           PREFERRED TIME WINDOW
 
           <div className="two">
 
-            <div className="field">
-              Start
-              <b>14:00</b>
-              ◷
-            </div>
+            <input
+              className="fieldInput"
+              type="time"
+              value={startTime}
+              onChange={(event) =>
+                setStartTime(event.target.value)
+              }
+            />
 
-            <div className="field">
-              End
-              <b>16:30</b>
-              ◷
-            </div>
+            <input
+              className="fieldInput"
+              type="time"
+              value={endTime}
+              onChange={(event) =>
+                setEndTime(event.target.value)
+              }
+            />
 
           </div>
-
         </label>
 
+        {/* BLOCK TYPE */}
 
         <label>
-
           BLOCK TYPE
 
           <div className="seg">
 
-            <button>
-              Traffic
-            </button>
-
-            <button>
-              Power
-            </button>
-
-            <button className="active">
-              Integrated
-            </button>
+            {[
+              ['TRAFFIC', 'Traffic'],
+              ['POWER', 'Power'],
+              ['INTEGRATED', 'Integrated'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={
+                  blockType === value
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  setBlockType(value)
+                }
+              >
+                {label}
+              </button>
+            ))}
 
           </div>
-
         </label>
 
+        {/* POWER */}
 
         <div className="toggle">
 
-          <b>
-            ϟ 25kV OHE Power Isolation
-          </b>
+          <div>
+            <b>
+              ⚡ 25kV OHE Power Isolation
+            </b>
 
-          <span>
-            Requires Traction Substation Permit
-            <i>●</i>
-          </span>
+            <span>
+              Requires Traction Substation Permit
+            </span>
+          </div>
 
-          <button>
-            ●
+          <button
+            type="button"
+            className={
+              powerBlock
+                ? 'toggleButton active'
+                : 'toggleButton'
+            }
+            onClick={() =>
+              setPowerBlock((current) => !current)
+            }
+          >
+            {powerBlock ? 'ON' : 'OFF'}
           </button>
 
         </div>
 
+        {/* RESOURCES */}
 
         <label>
-
-          ALLOCATED GANG & ROLLING PLANT
+          ALLOCATED RESOURCES
 
           <div className="chips">
 
-            <span>
-              Gang R01 (P-Way) ×
-            </span>
-
-            <span>
-              BCM Machine 614 ×
-            </span>
-
-            <span>
-              S&T Escort ×
-            </span>
-
-            <button>
-              ＋ Add
-            </button>
+            {['R01', 'R02', 'R03'].map(
+              (resourceId) => (
+                <button
+                  key={resourceId}
+                  type="button"
+                  className={
+                    resourceIds.includes(resourceId)
+                      ? 'resourceChip active'
+                      : 'resourceChip'
+                  }
+                  onClick={() =>
+                    toggleResource(resourceId)
+                  }
+                >
+                  {resourceId}
+                  {' '}
+                  {resourceIds.includes(resourceId)
+                    ? '✓'
+                    : '+'}
+                </button>
+              ),
+            )}
 
           </div>
-
         </label>
 
-
-        <label>
-
-          METHODOLOGY & TSR PLAN
-
-          <div className="textarea">
-            Deep screening and sleeper
-            renewal under cautionary
-            speed (30 km/h).
-          </div>
-
-        </label>
-
+        {/* PRE-CHECK */}
 
         <button
           className="runPre"
           onClick={run}
+          disabled={loading}
         >
-
           {loading ? (
-            <RefreshCw className="spin" />
+            <>
+              <RefreshCw
+                className="spin"
+                size={16}
+              />
+
+              Checking...
+            </>
           ) : (
-            <Sparkles size={16} />
+            <>
+              <Sparkles size={16} />
+
+              Run Smart Pre-Check
+            </>
           )}
-
-          Run Smart Pre-Check
-
         </button>
 
-
         <small className="helper">
-
-          ⟳ Simulates dynamic conflict
-          solver against live IR timetable,
-          scheduled rakes, and speed
-          restrictions.
-
+          Checks timetable conflicts, corridor windows,
+          restrictions, existing blocks and resource
+          availability before submission.
         </small>
 
       </section>
 
+      {/* ERROR */}
 
-      <div className="feas">
+      {error && (
+        <div className="precheckError">
+          <TriangleAlert size={16} />
 
-        <b>
-          ● Live Feasibility Result
-        </b>
+          <span>{error}</span>
+        </div>
+      )}
 
-        {pre && (
+      {/* RESULT */}
 
-          <span>
+      {pre && (
+        <section className="precheckResult">
 
-            {pre.status}
-            {' · '}
-            {pre.checks_passed}/
-            {pre.checks_total}
-            {' checks passed · '}
-            {pre.blocks}
-            {' blocking conflicts'}
+          <div className="precheckHeader">
 
-          </span>
+            <div>
+              <span className="eyebrow">
+                SMART PRE-CHECK
+              </span>
 
-        )}
+              <h2>
+                {pre.status === 'BLOCKED'
+                  ? 'Request cannot be submitted yet'
+                  : pre.status === 'WARNING'
+                    ? 'Request can be submitted with warnings'
+                    : 'Request passed pre-check'}
+              </h2>
+            </div>
 
-        <em>
-          {pre
-            ? `${pre.status}`
-            : 'Awaiting pre-check'}
-          ⌄
-        </em>
+            <strong
+              className={
+                pre.status === 'BLOCKED'
+                  ? 'statusBlocked'
+                  : pre.status === 'WARNING'
+                    ? 'statusWarning'
+                    : 'statusClear'
+              }
+            >
+              {pre.status}
+            </strong>
 
-      </div>
+          </div>
+
+          <div className="precheckStats">
+
+            <div>
+              <b>
+                {pre.checks_passed}/{pre.checks_total}
+              </b>
+
+              <span>
+                Checks passed
+              </span>
+            </div>
+
+            <div>
+              <b>{pre.warnings}</b>
+
+              <span>
+                Warnings
+              </span>
+            </div>
+
+            <div>
+              <b>{pre.blocks}</b>
+
+              <span>
+                Blocking conflicts
+              </span>
+            </div>
+
+          </div>
+
+          {pre.issues.length > 0 && (
+            <div className="precheckIssues">
+
+              <h3>
+                Issues detected
+              </h3>
+
+              {pre.issues.map((issue) => (
+                <div
+                  key={`${issue.code}-${issue.message}`}
+                  className={
+                    issue.severity === 'BLOCK'
+                      ? 'precheckIssue block'
+                      : 'precheckIssue warning'
+                  }
+                >
+                  <TriangleAlert size={15} />
+
+                  <div>
+                    <b>
+                      {issue.code}
+                    </b>
+
+                    <p>
+                      {issue.message}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+            </div>
+          )}
+
+          {pre.suggested_windows.length > 0 && (
+            <div className="suggestedWindows">
+
+              <h3>
+                Suggested Windows
+              </h3>
+
+              <p>
+                The system found these alternative
+                corridor windows for the requested work.
+              </p>
+
+              <div className="windowOptions">
+
+                {pre.suggested_windows.map(
+                  (window) => (
+                    <button
+                      key={`${window.start_time}-${window.end_time}`}
+                      type="button"
+                      onClick={() => {
+                        setStartTime(
+                          window.start_time.slice(0, 5),
+                        )
+
+                        setEndTime(
+                          window.end_time.slice(0, 5),
+                        )
+
+                        setPre(null)
+                      }}
+                    >
+                      <b>
+                        {window.start_time.slice(0, 5)}
+                        {' – '}
+                        {window.end_time.slice(0, 5)}
+                      </b>
+
+                      <span>
+                        Score {window.score}
+                      </span>
+
+                      <small>
+                        {window.reason}
+                      </small>
+                    </button>
+                  ),
+                )}
+
+              </div>
+
+            </div>
+          )}
+
+          <div className="submitGuardrail">
+
+            <ShieldCheck size={18} />
+
+            <span>
+              Pre-check is advisory. Final track possession
+              still requires formal railway authorization.
+            </span>
+
+          </div>
+
+          {pre.can_submit && (
+            <div className="submitAction">
+              <div>
+                <strong>Step 4: Submit Request</strong>
+                <span>
+                  Pre-check passed. This submits the request into the planning lifecycle.
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="runPre"
+                onClick={submitRequest}
+                disabled={submitting || request.requestStatus === 'VALIDATED'}
+              >
+                {submitting
+                  ? 'Submitting...'
+                  : request.requestStatus === 'VALIDATED'
+                    ? 'Already Validated'
+                    : 'Submit Request'}
+              </button>
+            </div>
+          )}
+
+        </section>
+      )}
 
     </>
   )
@@ -1841,9 +2179,10 @@ function RequestDetail({
 // ============================================================
 // PLACEHOLDER SCREENS
 // ============================================================
-
 function Planner() {
-  const [data, setData] = useState<PlanExplanationsResponse | null>(null)
+  const [data, setData] =
+    useState<PlanExplanationsResponse | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -1872,10 +2211,15 @@ function Planner() {
   if (loading) {
     return (
       <div className="page">
+
         <div className="pageHeader">
           <div>
-            <div className="eyebrow">BLOCK PLANNER</div>
+            <div className="eyebrow">
+              BLOCK PLANNER
+            </div>
+
             <h1>Planning Horizon</h1>
+
             <p>
               Building the maintenance block timeline...
             </p>
@@ -1883,13 +2227,19 @@ function Planner() {
         </div>
 
         <div className="placeholder">
+
           <CalendarDays size={42} />
+
           <h2>Loading plan</h2>
+
           <p>
-            Checking optimizer assignments, corridor windows,
-            resources and operational constraints.
+            Checking optimizer assignments,
+            corridor windows and operational
+            constraints.
           </p>
+
         </div>
+
       </div>
     )
   }
@@ -1897,17 +2247,32 @@ function Planner() {
   if (error || !data) {
     return (
       <div className="page">
+
         <div className="pageHeader">
+
           <div>
-            <div className="eyebrow">BLOCK PLANNER</div>
+            <div className="eyebrow">
+              BLOCK PLANNER
+            </div>
+
             <h1>Planning Horizon</h1>
-            <p>Unable to load the current planning result.</p>
+
+            <p>
+              Unable to load the current planning result.
+            </p>
           </div>
+
         </div>
 
         <div className="errorCard">
-          <strong>Could not load planning data</strong>
-          <p>{error ?? 'No planning data was returned.'}</p>
+
+          <strong>
+            Could not load planning data
+          </strong>
+
+          <p>
+            {error ?? 'No planning data was returned.'}
+          </p>
 
           <button
             className="primaryButton"
@@ -1915,7 +2280,9 @@ function Planner() {
           >
             Retry
           </button>
+
         </div>
+
       </div>
     )
   }
@@ -1927,29 +2294,37 @@ function Planner() {
   )
 
   const sections = [
-    ...new Set(assignments.map((item) => item.section_id)),
+    ...new Set(
+      assignments.map(
+        (item) => item.section_id,
+      ),
+    ),
   ]
 
   const timelineStart = 18 * 60
   const timelineEnd = 24 * 60
-  const timelineDuration = timelineEnd - timelineStart
+  const timelineDuration =
+    timelineEnd - timelineStart
 
- const toMinutes = (value: string) => {
-  const [hours, minutes] = value
-    .slice(0, 5)
-    .split(':')
-    .map(Number)
+  const toMinutes = (value: string) => {
+    const [hours, minutes] = value
+      .slice(0, 5)
+      .split(':')
+      .map(Number)
 
-  const normalizedHours = hours === 0 ? 24 : hours
+    const normalizedHours =
+      hours === 0 ? 24 : hours
 
-  return normalizedHours * 60 + minutes
-}
+    return normalizedHours * 60 + minutes
+  }
 
   const getLeft = (value: string) => {
     const minutes = toMinutes(value)
 
     return (
-      ((minutes - timelineStart) / timelineDuration) * 100
+      ((minutes - timelineStart) /
+        timelineDuration) *
+      100
     )
   }
 
@@ -1989,44 +2364,73 @@ function Planner() {
 
   return (
     <div className="page">
+
+      {/* HEADER */}
       <div className="pageHeader">
+
         <div>
-          <div className="eyebrow">BLOCK PLANNER</div>
+
+          <div className="eyebrow">
+            BLOCK PLANNER
+          </div>
 
           <h1>Planning Horizon</h1>
 
           <p>
-            {data.planning_date} · {data.block_type} block
+            {data.planning_date}
+            {' · '}
+            {data.block_type} block
           </p>
+
+          {data.plan_id && (
+            <small className="planId">
+              Plan ID: {data.plan_id}
+            </small>
+          )}
+
         </div>
 
         <button
           className="secondaryButton"
           onClick={loadPlan}
+          disabled={loading}
         >
+          <RefreshCw size={15} />
           Refresh Plan
         </button>
+
       </div>
 
+
+      {/* SUMMARY */}
       <div className="plannerSummary">
+
         <div>
           <span>Allocated</span>
-          <strong>{data.assigned_count}</strong>
+          <strong>
+            {data.assigned_count}
+          </strong>
         </div>
 
         <div>
           <span>Unscheduled</span>
-          <strong>{data.unscheduled_count}</strong>
+          <strong>
+            {data.unscheduled_count}
+          </strong>
         </div>
 
         <div>
           <span>Candidate pairs</span>
-          <strong>{data.candidate_pairs}</strong>
+          <strong>
+            {data.candidate_pairs}
+          </strong>
         </div>
 
         <div>
-          <span>Total priority</span>
-          <strong>{data.total_priority.toFixed(1)}</strong>
+          <span>Priority</span>
+          <strong>
+            {data.total_priority.toFixed(1)}
+          </strong>
         </div>
 
         <div>
@@ -2035,54 +2439,81 @@ function Planner() {
             {data.status}
           </strong>
         </div>
+
       </div>
 
+
+      {/* TIMELINE */}
       <section className="plannerCard">
+
         <div className="plannerCardHeader">
+
           <div>
+
             <div className="eyebrow">
               OPTIMIZED TIMELINE
             </div>
 
-            <h2>Maintenance Block Schedule</h2>
+            <h2>
+              Maintenance Block Schedule
+            </h2>
 
             <p>
-              Recommended assignments across available
-              corridor windows.
+              Recommended assignments across
+              available corridor windows.
             </p>
+
           </div>
 
           <span className="countBadge">
             {assignments.length} blocks
           </span>
+
         </div>
 
+
         <div className="timeline">
+
           <div className="timelineHeader">
+
             <div className="timelineLabel">
               SECTION
             </div>
 
             <div className="timelineHours">
+
               {hourMarkers.map((hour) => (
-                <span key={hour}>{hour}</span>
+                <span key={hour}>
+                  {hour}
+                </span>
               ))}
+
             </div>
+
           </div>
 
+
           {sections.length === 0 ? (
+
             <div className="emptyTimeline">
+
               <CalendarDays size={28} />
 
-              <strong>No assignments</strong>
+              <strong>
+                No assignments
+              </strong>
 
               <span>
-                The optimizer did not allocate any task
-                in this planning horizon.
+                The optimizer did not allocate
+                any task in this planning horizon.
               </span>
+
             </div>
+
           ) : (
+
             sections.map((section) => {
+
               const sectionAssignments =
                 assignments.filter(
                   (item) =>
@@ -2094,11 +2525,15 @@ function Planner() {
                   className="timelineRow"
                   key={section}
                 >
+
                   <div className="timelineLabel">
-                    <strong>{section}</strong>
+                    <strong>
+                      {section}
+                    </strong>
 
                     <span>
-                      {sectionAssignments.length}{' '}
+                      {sectionAssignments.length}
+                      {' '}
                       block
                       {sectionAssignments.length !== 1
                         ? 's'
@@ -2106,41 +2541,27 @@ function Planner() {
                     </span>
                   </div>
 
+
                   <div className="timelineTrack">
-                    {hourMarkers.map((hour) => (
-                      <div
-                        className="timelineGridLine"
-                        key={hour}
-                        style={{
-                          left: `${
-                            getLeft(hour)
-                          }%`,
-                        }}
-                      />
-                    ))}
 
                     {sectionAssignments.map(
                       (item) => (
+
                         <div
-                          className="timelineBlock"
                           key={item.task_id}
+                          className="timelineBlock"
                           style={{
-                            left: `${Math.max(
-                              0,
-                              getLeft(
-                                item.start_time,
-                              ),
+                            left: `${getLeft(
+                              item.start_time,
                             )}%`,
-                            width: `${Math.max(
-                              2,
-                              getWidth(
-                                item.start_time,
-                                item.end_time,
-                              ),
+                            width: `${getWidth(
+                              item.start_time,
+                              item.end_time,
                             )}%`,
                           }}
-                          title={`${item.task_id} · ${item.start_time}–${item.end_time}`}
+                          title={`${item.task_id} · ${formatTime(item.start_time)}–${formatTime(item.end_time)}`}
                         >
+
                           <strong>
                             {item.task_id}
                           </strong>
@@ -2149,58 +2570,88 @@ function Planner() {
                             {formatTime(
                               item.start_time,
                             )}
-                            {'–'}
+                            –
                             {formatTime(
                               item.end_time,
                             )}
                           </span>
+
                         </div>
+
                       ),
                     )}
+
                   </div>
+
                 </div>
               )
             })
+
           )}
+
         </div>
+
       </section>
 
+
+      {/* ASSIGNMENT TABLE */}
       <section className="contentSection">
+
         <div className="sectionHeading">
+
           <div>
+
             <div className="eyebrow">
               ASSIGNMENT DETAILS
             </div>
 
-            <h2>Optimized Blocks</h2>
+            <h2>
+              Optimized Blocks
+            </h2>
+
           </div>
 
           <span className="countBadge">
             {assignments.length} tasks
           </span>
+
         </div>
 
+
         <div className="planAssignmentList">
+
           {assignments.map((item) => (
+
             <div
               className="planAssignmentCard"
               key={item.task_id}
             >
+
               <div className="planAssignmentTime">
+
                 <strong>
-                  {formatTime(item.start_time)}
+                  {formatTime(
+                    item.start_time,
+                  )}
                 </strong>
 
                 <span>to</span>
 
                 <strong>
-                  {formatTime(item.end_time)}
+                  {formatTime(
+                    item.end_time,
+                  )}
                 </strong>
+
               </div>
 
+
               <div className="planAssignmentMain">
+
                 <div className="recommendationTop">
+
                   <div>
+
                     <strong>
                       {item.task_id}
                     </strong>
@@ -2212,15 +2663,19 @@ function Planner() {
                     <span className="resourceTag">
                       {item.resource_id}
                     </span>
+
                   </div>
 
                   <span className="priorityBadge">
                     Priority{' '}
                     {item.priority_score.toFixed(1)}
                   </span>
+
                 </div>
 
+
                 <div className="assignmentDetails">
+
                   <span>
                     Window {item.window_id}
                   </span>
@@ -2229,27 +2684,40 @@ function Planner() {
                     {item.duration_min} min
                   </span>
 
-                  {(item.restriction_penalty ?? 0) >
-                    0 && (
+                  {(item.restriction_penalty ?? 0) > 0 && (
+
                     <span className="restrictionWarning">
                       Restriction penalty{' '}
                       {item.restriction_penalty}
                     </span>
+
                   )}
+
                 </div>
+
               </div>
+
             </div>
+
           ))}
+
         </div>
+
       </section>
+
     </div>
   )
 }
 
+
 function Recommended() {
-  const [data, setData] = useState<PlanExplanationsResponse | null>(null)
+  const [data, setData] =
+    useState<PlanExplanationsResponse | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [designating, setDesignating] = useState(false)
+  const [designated, setDesignated] = useState(false)
 
   async function loadRecommendations() {
     try {
@@ -2258,6 +2726,7 @@ function Recommended() {
 
       const result = await getPlanExplanations()
       setData(result)
+      setDesignated(false)
     } catch (err) {
       setError(
         err instanceof Error
@@ -2273,6 +2742,25 @@ function Recommended() {
     loadRecommendations()
   }, [])
 
+  function handleDesignatePlan() {
+    if (!data || data.assignments.length === 0) {
+      return
+    }
+
+    setDesignating(true)
+
+    /*
+      Phase 1:
+      Designation is currently a UI simulation.
+      The real approval/designation endpoint will be
+      connected in the lifecycle phase.
+    */
+    setTimeout(() => {
+      setDesignating(false)
+      setDesignated(true)
+    }, 500)
+  }
+
   if (loading) {
     return (
       <div className="page">
@@ -2280,16 +2768,21 @@ function Recommended() {
           <div>
             <div className="eyebrow">AI PLANNING</div>
             <h1>Recommended Plan</h1>
-            <p>Generating an explainable maintenance plan...</p>
+            <p>
+              Generating an explainable maintenance plan...
+            </p>
           </div>
         </div>
 
         <div className="placeholder">
           <Sparkles size={42} />
+
           <h2>Running optimizer</h2>
+
           <p>
-            Checking corridor windows, restrictions, conflicts,
-            dependencies and resource availability.
+            Checking corridor windows, restrictions,
+            train conflicts, dependencies and resource
+            availability.
           </p>
         </div>
       </div>
@@ -2302,14 +2795,23 @@ function Recommended() {
         <div className="pageHeader">
           <div>
             <div className="eyebrow">AI PLANNING</div>
+
             <h1>Recommended Plan</h1>
-            <p>Explainable optimizer recommendations</p>
+
+            <p>
+              Explainable optimizer recommendations
+            </p>
           </div>
         </div>
 
         <div className="errorCard">
-          <strong>Could not load recommendations</strong>
-          <p>{error ?? 'No planning data was returned.'}</p>
+          <strong>
+            Could not load recommended plan
+          </strong>
+
+          <p>
+            {error ?? 'No planning data was returned.'}
+          </p>
 
           <button
             className="primaryButton"
@@ -2322,13 +2824,28 @@ function Recommended() {
     )
   }
 
-  const sortedAssignments = [...data.assignments].sort(
+  const assignments = [...data.assignments].sort(
     (a, b) =>
       a.start_time.localeCompare(b.start_time) ||
       a.section_id.localeCompare(b.section_id),
   )
 
-  const topExplanations = data.explanations.slice(0, 12)
+  const explanations =
+    [...data.explanations]
+      .sort(
+        (a, b) =>
+          b.priority_score - a.priority_score,
+      )
+      .slice(0, 12)
+
+  const totalPenalty = assignments.reduce(
+    (sum, item) =>
+      sum + Number(item.restriction_penalty ?? 0),
+    0,
+  )
+
+  const effectiveScore =
+    data.total_priority - totalPenalty
 
   const reasonLabel: Record<string, string> = {
     NO_SUITABLE_WINDOW: 'No suitable window',
@@ -2338,211 +2855,454 @@ function Recommended() {
     TRAIN_CONFLICT: 'Train conflict',
   }
 
-  const formatTime = (value: string) => value.slice(0, 5)
+  const formatTime = (value: string) =>
+    value.slice(0, 5)
 
   return (
     <div className="page">
+
+      {/* HEADER */}
       <div className="pageHeader">
         <div>
-          <div className="eyebrow">AI PLANNING</div>
+          <div className="eyebrow">
+            AI PLANNING
+          </div>
+
           <h1>Recommended Plan</h1>
+
           <p>
             Explainable maintenance plan for{' '}
-            {data.planning_date} · {data.block_type} block
+            {data.planning_date} · {data.block_type}
           </p>
+
+          {data.plan_id && (
+            <small className="planId">
+              Plan ID: {data.plan_id}
+            </small>
+          )}
         </div>
 
-        <button
-          className="secondaryButton"
-          onClick={loadRecommendations}
-        >
-          Refresh Plan
-        </button>
-      </div>
+        <div className="pageHeaderActions">
 
-      <div className="recommendationSummary">
-        <div className="summaryMain">
-          <div className="summaryIcon">
-            <Sparkles size={24} />
-          </div>
+          <button
+            className="secondaryButton"
+            onClick={loadRecommendations}
+            disabled={loading}
+          >
+            <RefreshCw size={15} />
 
-          <div>
-            <div className="eyebrow">OPTIMIZER RESULT</div>
-            <h2>{data.assigned_count} tasks allocated</h2>
-            <p>
-              The optimizer found the best feasible allocation
-              for the selected planning horizon.
-            </p>
-          </div>
-        </div>
+            Refresh Plan
+          </button>
 
-        <div className="summaryStats">
-          <div>
-            <span>Allocated</span>
-            <strong>{data.assigned_count}</strong>
-          </div>
+          <button
+            className="primaryButton"
+            onClick={handleDesignatePlan}
+            disabled={
+              designating ||
+              designated ||
+              assignments.length === 0
+            }
+          >
+            <ShieldCheck size={15} />
 
-          <div>
-            <span>Unscheduled</span>
-            <strong>{data.unscheduled_count}</strong>
-          </div>
+            {designating
+              ? 'Designating...'
+              : designated
+                ? 'Plan Designated'
+                : 'Designate Plan'}
+          </button>
 
-          <div>
-            <span>Total priority</span>
-            <strong>{data.total_priority.toFixed(1)}</strong>
-          </div>
-
-          <div>
-            <span>Status</span>
-            <strong className="successText">{data.status}</strong>
-          </div>
         </div>
       </div>
 
+
+      {/* STATUS */}
+      <section className="recommendationHero">
+
+        <div className="recommendationHeroMain">
+
+          <div className="statusLine">
+            <span className="statusDot good" />
+
+            <strong>
+              {data.status}
+            </strong>
+
+            <span>
+              Optimizer result
+            </span>
+          </div>
+
+          <h2>
+            {assignments.length} maintenance tasks
+            scheduled
+          </h2>
+
+          <p>
+            The optimizer selected feasible maintenance
+            windows while respecting operational
+            constraints.
+          </p>
+
+        </div>
+
+        <div className="heroMetric">
+          <span>Effective score</span>
+
+          <strong>
+            {effectiveScore.toFixed(1)}
+          </strong>
+
+          <small>
+            Priority minus restriction penalty
+          </small>
+        </div>
+
+      </section>
+
+
+      {/* KPI GRID */}
+      <div className="kpis recommendationKpis">
+
+        <Kpi
+          title="Scheduled"
+          value={data.assigned_count}
+          note="Tasks allocated"
+          tone="good"
+          badge="Selected"
+        />
+
+        <Kpi
+          title="Unscheduled"
+          value={data.unscheduled_count}
+          note="Tasks needing review"
+          tone="warn"
+          badge="Review"
+        />
+
+        <Kpi
+          title="Candidate Pairs"
+          value={data.candidate_pairs}
+          note="Task-window combinations"
+          tone="neutral"
+          badge="Feasible"
+        />
+
+        <Kpi
+          title="Priority Covered"
+          value={data.total_priority.toFixed(1)}
+          note="Selected task priority"
+          tone="good"
+          badge="Score"
+        />
+
+        <Kpi
+          title="Restrictions"
+          value={totalPenalty.toFixed(1)}
+          note="Applied penalties"
+          tone={
+            totalPenalty > 0
+              ? 'warn'
+              : 'good'
+          }
+          badge={
+            totalPenalty > 0
+              ? 'Considered'
+              : 'Clear'
+          }
+        />
+
+      </div>
+
+
+      {/* OPTIMIZED ASSIGNMENTS */}
       <section className="contentSection">
+
         <div className="sectionHeading">
+
           <div>
-            <div className="eyebrow">RECOMMENDED ALLOCATION</div>
-            <h2>Recommended Block Plan</h2>
+            <div className="eyebrow">
+              OPTIMIZED ASSIGNMENTS
+            </div>
+
+            <h2>
+              Recommended maintenance blocks
+            </h2>
+
+            <p>
+              These are the blocks selected by the
+              constraint optimizer.
+            </p>
           </div>
 
           <span className="countBadge">
-            {data.assigned_count} tasks
+            {assignments.length} blocks
           </span>
+
         </div>
+
 
         <div className="planAssignmentList">
-          {sortedAssignments.map((item) => (
-            <div
-              className="planAssignmentCard"
-              key={item.task_id}
-            >
-              <div className="planAssignmentTime">
-                <strong>{formatTime(item.start_time)}</strong>
-                <span>to</span>
-                <strong>{formatTime(item.end_time)}</strong>
-              </div>
 
-              <div className="planAssignmentMain">
-                <div className="recommendationTop">
-                  <div>
-                    <strong>{item.task_id}</strong>
+          {assignments.length === 0 ? (
 
-                    <span className="sectionTag">
-                      {item.section_id}
-                    </span>
+            <div className="emptyState">
+              <CalendarDays size={28} />
 
-                    <span className="resourceTag">
-                      {item.resource_id}
-                    </span>
-                  </div>
+              <strong>
+                No tasks could be scheduled
+              </strong>
 
-                  <span className="priorityBadge">
-                    Priority {item.priority_score.toFixed(1)}
-                  </span>
+              <span>
+                Review the decision-support section
+                below for blocking reasons.
+              </span>
+            </div>
+
+          ) : (
+
+            assignments.map((item) => (
+
+              <div
+                className="planAssignmentCard"
+                key={item.task_id}
+              >
+
+                <div className="planAssignmentTime">
+
+                  <strong>
+                    {formatTime(item.start_time)}
+                  </strong>
+
+                  <span>to</span>
+
+                  <strong>
+                    {formatTime(item.end_time)}
+                  </strong>
+
                 </div>
 
-                <div className="assignmentDetails">
-  <span>Window {item.window_id}</span>
 
-  <span>{item.duration_min} min</span>
+                <div className="planAssignmentMain">
 
-{(item.restriction_penalty ?? 0) > 0 && (
-      <span className="restrictionWarning">
-        Restriction penalty {item.restriction_penalty}
-      </span>
-    )}
-</div>
+                  <div className="recommendationTop">
+
+                    <div>
+
+                      <strong>
+                        {item.task_id}
+                      </strong>
+
+                      <span className="sectionTag">
+                        {item.section_id}
+                      </span>
+
+                      <span className="resourceTag">
+                        {item.resource_id}
+                      </span>
+
+                    </div>
+
+                    <span className="priorityBadge">
+                      Priority{' '}
+                      {item.priority_score.toFixed(1)}
+                    </span>
+
+                  </div>
+
+
+                  <div className="assignmentDetails">
+
+                    <span>
+                      Window {item.window_id}
+                    </span>
+
+                    <span>
+                      {item.duration_min} min
+                    </span>
+
+                    {(item.restriction_penalty ?? 0) > 0 && (
+
+                      <span className="restrictionWarning">
+                        Restriction penalty{' '}
+                        {item.restriction_penalty}
+                      </span>
+
+                    )}
+
+                  </div>
+
+                </div>
+
               </div>
-            </div>
-          ))}
+
+            ))
+
+          )}
+
         </div>
+
       </section>
 
+
+      {/* DECISION SUPPORT */}
       <section className="contentSection">
+
         <div className="sectionHeading">
+
           <div>
-            <div className="eyebrow">DECISION SUPPORT</div>
-            <h2>Why tasks were not scheduled</h2>
+            <div className="eyebrow">
+              DECISION SUPPORT
+            </div>
+
+            <h2>
+              Why tasks were not scheduled
+            </h2>
+
+            <p>
+              The planner explains blocked or
+              unscheduled maintenance work.
+            </p>
           </div>
 
           <span className="countBadge">
             {data.explanations.length} tasks
           </span>
+
         </div>
 
+
         <div className="recommendationList">
-          {topExplanations.map((item) => (
+
+          {explanations.map((item) => (
+
             <div
               className="recommendationCard"
               key={item.task_id}
             >
+
               <div className="recommendationTop">
+
                 <div>
-                  <strong>{item.task_id}</strong>
+
+                  <strong>
+                    {item.task_id}
+                  </strong>
 
                   <span className="sectionTag">
                     {item.section_id}
                   </span>
+
                 </div>
 
                 <span className="priorityBadge">
-                  Priority {item.priority_score.toFixed(1)}
+                  Priority{' '}
+                  {item.priority_score.toFixed(1)}
                 </span>
+
               </div>
+
 
               <div className="reasonRow">
+
                 <span className="reasonBadge">
-                  {reasonLabel[item.reason_code] ??
-                    item.reason_code}
+                  {reasonLabel[item.reason_code]
+                    ?? item.reason_code}
                 </span>
+
               </div>
 
-              <p>{item.reason}</p>
-          {item.best_alternative && (
-            <div className="alternativeBox">
-              <div className="alternativeHeader">
-                <span className="alternativeLabel">
-                  BEST ALTERNATIVE
-                </span>
 
-                <span className="alternativeWindow">
-                  {item.best_alternative.window_id}
-                </span>
-              </div>
+              <p>
+                {item.reason}
+              </p>
 
-              <div className="alternativeDetails">
-                <strong>
-                  {formatTime(item.best_alternative.start_time)}
-                  {' '}to{' '}
-                  {formatTime(item.best_alternative.end_time)}
-                </strong>
 
-                <span>
-                  {item.best_alternative.duration_min} min
-                </span>
+              {item.best_alternative && (
 
-                {(item.best_alternative.restriction_penalty ?? 0) > 0 && (
-                    <span className="restrictionWarning">
-                      Restriction penalty{' '}
-                      {item.best_alternative.restriction_penalty}
+                <div className="alternativeBox">
+
+                  <div className="alternativeHeader">
+
+                    <span className="alternativeLabel">
+                      BEST ALTERNATIVE
                     </span>
-                  )}
-              </div>
+
+                    <span className="alternativeWindow">
+                      {item.best_alternative.window_id}
+                    </span>
+
+                  </div>
+
+
+                  <div className="alternativeDetails">
+
+                    <strong>
+                      {formatTime(
+                        item.best_alternative.start_time,
+                      )}
+
+                      {' '}to{' '}
+
+                      {formatTime(
+                        item.best_alternative.end_time,
+                      )}
+                    </strong>
+
+                    <span>
+                      {item.best_alternative.duration_min}
+                      {' '}min
+                    </span>
+
+                    {(item.best_alternative
+                      .restriction_penalty ?? 0) > 0 && (
+
+                      <span className="restrictionWarning">
+                        Restriction penalty{' '}
+                        {item.best_alternative
+                          .restriction_penalty}
+                      </span>
+
+                    )}
+
+                  </div>
+
+                </div>
+
+              )}
+
             </div>
-          )}
-            </div>
+
           ))}
+
         </div>
 
+
         {data.explanations.length > 12 && (
+
           <div className="moreNotice">
-            Showing the 12 highest-priority unscheduled tasks.
-            Additional explanations are available from the planning
-            API.
+            Showing the 12 highest-priority
+            unscheduled tasks.
           </div>
+
         )}
+
       </section>
+
+
+      {/* SAFETY GUARDRAIL */}
+      <div className="submitGuardrail">
+
+        <ShieldCheck size={18} />
+
+        <span>
+          This plan is a recommendation.
+          Final corridor possession still requires
+          formal railway authorization.
+        </span>
+
+      </div>
+
     </div>
   )
 }

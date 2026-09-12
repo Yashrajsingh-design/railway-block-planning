@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.block_request import BlockRequest
+from app.models.maintenance_task import MaintenanceTask
+from app.models.asset import Asset
 from app.schemas.requests import (
     BlockRequestCreate,
     BlockRequestResponse,
@@ -20,12 +22,25 @@ router = APIRouter(
 
 service = BlockRequestService()
 lifecycle_service = RequestLifecycleService()
+def to_response(
+    request: BlockRequest,
+    db: Session,
+) -> BlockRequestResponse:
+    task = None
+    asset = None
 
-def to_response(request: BlockRequest) -> BlockRequestResponse:
+    if request.task_id:
+        task = db.get(MaintenanceTask, request.task_id)
+
+    if task and task.asset_id:
+        asset = db.get(Asset, task.asset_id)
+
     return BlockRequestResponse(
         block_request_id=request.block_request_id,
         department_id=request.department_id,
         task_id=request.task_id,
+        asset_id=asset.asset_id if asset else None,
+        location_id=asset.location_id if asset else None,
         section_id=request.section_id,
         requested_date=request.requested_date,
         preferred_start=request.preferred_start,
@@ -39,7 +54,6 @@ def to_response(request: BlockRequest) -> BlockRequestResponse:
         power_block_required=request.power_block_required,
         bundling_candidate=request.bundling_candidate,
     )
-
 
 @router.get(
     "",
@@ -55,7 +69,7 @@ def get_block_requests(
     ).scalars().all()
 
     return [
-        to_response(request)
+        to_response(request, db)
         for request in requests
     ]
 
@@ -81,7 +95,7 @@ def get_block_request(
             detail="Block request not found",
         )
 
-    return to_response(request)
+    return to_response(request,db)
 
 
 @router.post(
@@ -99,7 +113,7 @@ def create_block_request(
         data=data,
     )
 
-    return to_response(request)
+    return to_response(request, db)
 
 @router.patch(
     "/{block_request_id}/status",
@@ -117,4 +131,4 @@ def update_request_status(
         new_status=data.status,
     )
 
-    return to_response(request)
+    return to_response(request, db)

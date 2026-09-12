@@ -14,7 +14,7 @@ class PreCheckRequest(BaseModel):
     preferred_date: date
     preferred_start_time: time
     preferred_end_time: time
-
+    block_request_id: str | None = None
     minimum_duration_minutes: int = Field(
         gt=0,
         le=1440,

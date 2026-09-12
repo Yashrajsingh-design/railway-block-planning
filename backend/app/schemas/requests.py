@@ -45,6 +45,8 @@ class BlockRequestResponse(BaseModel):
 
     department_id: str | None
     task_id: str | None
+    asset_id: str | None = None
+    location_id: str | None = None
     section_id: str | None
 
     requested_date: date | None
