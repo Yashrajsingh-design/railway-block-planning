@@ -12,6 +12,8 @@ from app.api.plan_explanations import router as plan_explanations_router
 from app.api.plan_comparison import router as plan_comparison_router
 from app.api.dashboard import router as dashboard_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.plan_lifecycle import router as plan_lifecycle_router
+
 
 
 app = FastAPI(
@@ -70,3 +72,9 @@ app.include_router(plan_explanations_router)
 app.include_router(plan_comparison_router)
 
 app.include_router(dashboard_router)
+
+app.include_router(
+    plan_lifecycle_router,
+    prefix="/api/v1/plans",
+    tags=["plans"],
+)
