@@ -15,7 +15,7 @@ from app.models.resource import Resource
 from app.models.resource_availability import ResourceAvailability
 from app.models.plan import Plan
 from app.models.plan_assignment import PlanAssignment
-
+from app.models.audit_event import AuditEvent
 
 __all__ = [
     "Zone",
@@ -35,4 +35,5 @@ __all__ = [
     "TrainEvent",
     "Plan",
     "PlanAssignment",
+    "AuditEvent",
 ]
